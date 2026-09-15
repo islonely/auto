@@ -1,7 +1,7 @@
 Module {
 	name: 'auto'
-	description: 'Set and get mouse position.'
-	version: '0.1'
+	description: 'Cross-platform mouse and keyboard manipulation.'
+	version: '0.2'
 	license: 'MIT'
 	dependencies: []
 }

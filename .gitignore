@@ -1,11 +1,13 @@
 # Binaries for programs and plugins
 main
 mouse
+auto
 *.exe
 *.exe~
 *.so
 *.dylib
 *.dll
+*.o
 
 # Ignore binary output folders
 bin/

@@ -77,7 +77,7 @@ const keycode_left_arrow    = $if macos { 123 } $else $if windows { 0x25 } $else
 const keycode_right_arrow   = $if macos { 124 } $else $if windows { 0x27 } $else { 0xFF53 }
 const keycode_up_arrow      = $if macos { 126 } $else $if windows { 0x26 } $else { 0xFF52 }
 const keycode_down_arrow    = $if macos { 125 } $else $if windows { 0x28 } $else { 0xFF54 }
-const keycode_delete        = $if macos { 51 }  $else $if windows { 0x2E } $else { 0xFFFF }
+const keycode_delete        = $if macos { 117 } $else $if windows { 0x2E } $else { 0xFFFF }
 // vfmt on
 
 // KeyModifier is a key which can be pressed in combination with another key.
@@ -305,25 +305,204 @@ pub fn Keyboard.write(str string, params KeyboardWriteParams) {
 // keyboard_event creates an event from the given key_code and mod.
 fn keyboard_event(key_code KeyCode, mod KeyModifier, is_key_down_event bool) {
 	$if macos {
-		event := C.CGEventCreateKeyboardEvent(unsafe { nil }, int(key_code), is_key_down_event)
-		C.CGEventPost(C.kCGHIDEventTap, event)
-		C.CFRelease(event)
-	} $else $if windows {
-		mut keys := []int{cap: 3}
+		mut flags := u64(0)
 		if mod.has(.shift) {
-			keys << C.VK_SHIFT
+			flags |= cg_event_flag_shift
 		}
 		if mod.has(.ctrl) {
-			keys << C.VK_CONTROL
+			flags |= cg_event_flag_control
 		}
 		if mod.has(.alt) {
-			keys << C.VK_MENU
+			flags |= cg_event_flag_alternate
+		}
+		event := C.CGEventCreateKeyboardEvent(unsafe { nil }, int(key_code), is_key_down_event)
+		if event != unsafe { nil } {
+			C.CGEventSetFlags(event, flags)
+			C.CGEventPost(cg_hid_event_tap, event)
+			C.CFRelease(event)
+		}
+	} $else $if windows {
+		mut keys := []int{cap: 4}
+		if mod.has(.shift) {
+			keys << int(vk_shift)
+		}
+		if mod.has(.ctrl) {
+			keys << int(vk_control)
+		}
+		if mod.has(.alt) {
+			keys << int(vk_menu)
 		}
 		keys << int(key_code)
-		for key in keys {
-			C.keybd_event(key, 0, if is_key_down_event { 0 } else { C.KEYEVENTF_KEYUP },
-				0)
+		if is_key_down_event {
+			for key in keys {
+				C.keybd_event(u8(key), 0, 0, 0)
+			}
+		} else {
+			for key in keys.reverse() {
+				C.keybd_event(u8(key), 0, keyeventf_keyup, 0)
+			}
 		}
-	} $else {
+	} $else $if linux {
+		if Screen.compositor() == .wayland {
+			wayland_key_event(key_code, mod, is_key_down_event)
+		} else {
+			x11_key_event(key_code, mod, is_key_down_event)
+		}
+	}
+}
+
+fn x11_key_event(key_code KeyCode, mod KeyModifier, is_key_down bool) {
+	$if linux && $pkgconfig('x11') && $pkgconfig('xtst') {
+		display := unsafe { x11_display() }
+		if display == unsafe { nil } {
+			return
+		}
+		keycode := C.XKeysymToKeycode(display, u64(key_code))
+		shift := C.XKeysymToKeycode(display, u64(KeyCode.left_shift))
+		ctrl := C.XKeysymToKeycode(display, u64(KeyCode.left_ctrl))
+		alt := C.XKeysymToKeycode(display, u64(KeyCode.left_alt))
+		if is_key_down {
+			if mod.has(.shift) {
+				C.XTestFakeKeyEvent(display, shift, true, 0)
+			}
+			if mod.has(.ctrl) {
+				C.XTestFakeKeyEvent(display, ctrl, true, 0)
+			}
+			if mod.has(.alt) {
+				C.XTestFakeKeyEvent(display, alt, true, 0)
+			}
+			C.XTestFakeKeyEvent(display, keycode, true, 0)
+		} else {
+			C.XTestFakeKeyEvent(display, keycode, false, 0)
+			if mod.has(.alt) {
+				C.XTestFakeKeyEvent(display, alt, false, 0)
+			}
+			if mod.has(.ctrl) {
+				C.XTestFakeKeyEvent(display, ctrl, false, 0)
+			}
+			if mod.has(.shift) {
+				C.XTestFakeKeyEvent(display, shift, false, 0)
+			}
+		}
+		C.XSync(display, false)
+	}
+}
+
+// wayland_key_event types through the uinput virtual keyboard. Keys are
+// mapped from the V enum to Linux evdev key codes.
+fn wayland_key_event(key_code KeyCode, mod KeyModifier, is_key_down bool) {
+	$if linux {
+		if C.auto_uinput_open_keyboard() != 0 {
+			return
+		}
+		code := keycode_to_evdev(key_code)
+		if code == 0 {
+			return
+		}
+		if is_key_down {
+			if mod.has(.shift) {
+				C.auto_uinput_key(42, 1)
+			}
+			if mod.has(.ctrl) {
+				C.auto_uinput_key(29, 1)
+			}
+			if mod.has(.alt) {
+				C.auto_uinput_key(56, 1)
+			}
+			C.auto_uinput_key(code, 1)
+		} else {
+			C.auto_uinput_key(code, 0)
+			if mod.has(.alt) {
+				C.auto_uinput_key(56, 0)
+			}
+			if mod.has(.ctrl) {
+				C.auto_uinput_key(29, 0)
+			}
+			if mod.has(.shift) {
+				C.auto_uinput_key(42, 0)
+			}
+		}
+	}
+}
+
+// keycode_to_evdev maps a `KeyCode` to its Linux evdev (`linux/input-event-codes.h`)
+// key code.
+fn keycode_to_evdev(key_code KeyCode) int {
+	return match key_code {
+		.a { 30 }
+		.b { 48 }
+		.c { 46 }
+		.d { 32 }
+		.e { 18 }
+		.f { 33 }
+		.g { 34 }
+		.h { 35 }
+		.i { 23 }
+		.j { 36 }
+		.k { 37 }
+		.l { 38 }
+		.m { 50 }
+		.n { 49 }
+		.o { 24 }
+		.p { 25 }
+		.q { 16 }
+		.r { 19 }
+		.s { 31 }
+		.t { 20 }
+		.u { 22 }
+		.v { 47 }
+		.w { 17 }
+		.x { 45 }
+		.y { 21 }
+		.z { 44 }
+		._0 { 11 }
+		._1 { 2 }
+		._2 { 3 }
+		._3 { 4 }
+		._4 { 5 }
+		._5 { 6 }
+		._6 { 7 }
+		._7 { 8 }
+		._8 { 9 }
+		._9 { 10 }
+		.space { 57 }
+		.semicolon { 39 }
+		.comma { 51 }
+		.period { 52 }
+		.slash { 53 }
+		.backtick { 41 }
+		.left_bracket { 26 }
+		.right_bracket { 27 }
+		.backslash { 43 }
+		.quote { 40 }
+		.hyphen { 12 }
+		.equals { 13 }
+		.return { 28 }
+		.backspace { 14 }
+		.tab { 15 }
+		.left_shift { 42 }
+		.right_shift { 54 }
+		.left_ctrl { 29 }
+		.right_ctrl { 97 }
+		.left_alt { 56 }
+		.right_alt { 100 }
+		.escape { 1 }
+		.f1 { 59 }
+		.f2 { 60 }
+		.f3 { 61 }
+		.f4 { 62 }
+		.f5 { 63 }
+		.f6 { 64 }
+		.f7 { 65 }
+		.f8 { 66 }
+		.f9 { 67 }
+		.f10 { 68 }
+		.f11 { 87 }
+		.f12 { 88 }
+		.left_arrow { 105 }
+		.right_arrow { 106 }
+		.up_arrow { 103 }
+		.down_arrow { 108 }
+		.delete { 111 }
 	}
 }
