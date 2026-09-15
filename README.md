@@ -42,6 +42,16 @@ fn main() {
 }
 ```
 
+## Examples
+
+Runnable examples live in [`examples/`](examples):
+
+- `examples/mouse.v` - move, click and drag the mouse
+- `examples/keyboard.v` - type text and press shortcuts
+- `examples/screen.v` - inspect the compositor, display size and refresh rate
+
+Run one with `v run examples/mouse.v`.
+
 ## Platform notes
 
 ### macOS
