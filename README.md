@@ -81,6 +81,7 @@ Runnable examples live in [`examples/`](examples):
 - `examples/keyboard.v` - type text and press shortcuts
 - `examples/screen.v` - inspect the compositor, display size and refresh rate
 - `examples/window.v` - read and wait for the active window
+- `examples/wayland.v` - detect the compositor and inject input on Wayland
 
 Run one with `v run examples/mouse.v`.
 
