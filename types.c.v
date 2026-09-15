@@ -17,6 +17,12 @@ $if linux {
 		fn C.XFlush(voidptr) int
 		fn C.XSync(voidptr, bool) int
 		fn C.XKeysymToKeycode(voidptr, u64) u8
+		fn C.XInternAtom(voidptr, &char, bool) u64
+		fn C.XGetWindowProperty(voidptr, u64, u64, i64, i64, bool, u64, &u64, &int, &u64, &u64, &&u8) int
+		fn C.XFree(voidptr) int
+		fn C.XGetInputFocus(voidptr, &u64, &int) int
+		fn C.XFetchName(voidptr, u64, &&char) bool
+		fn C.XGetWindowAttributes(voidptr, u64, voidptr) bool
 	}
 
 	$if $pkgconfig('xtst') {
@@ -124,6 +130,34 @@ $if linux {
 	fn C.mouse_event(u32, u32, u32, u32, u64)
 	fn C.EnumDisplaySettings(&char, u32, &C.DEVMODE) bool
 	fn C.keybd_event(u8, u8, u32, u64)
+
+	@[typedef]
+	struct C.RECT {
+		left   int
+		top    int
+		right  int
+		bottom int
+	}
+
+	@[typedef]
+	struct C.GUITHREADINFO {
+		cbSize        u32
+		flags         u32
+		hwndActive    voidptr
+		hwndFocus     voidptr
+		hwndCapture   voidptr
+		hwndMenuOwner voidptr
+		hwndMoveSize  voidptr
+		hwndCaret     voidptr
+		rcCaret       C.RECT
+	}
+
+	fn C.GetForegroundWindow() voidptr
+	fn C.IsWindow(voidptr) bool
+	fn C.GetWindowTextLengthW(voidptr) int
+	fn C.GetWindowTextW(voidptr, &u16, int) int
+	fn C.GetWindowThreadProcessId(voidptr, &u32) u32
+	fn C.GetGUIThreadInfo(u32, voidptr) bool
 } $else $if macos {
 	#flag -framework ApplicationServices
 	#include <ApplicationServices/ApplicationServices.h>
@@ -170,6 +204,16 @@ $if linux {
 	fn C.CGDisplayCopyDisplayMode(u32) voidptr
 	fn C.CGDisplayModeGetRefreshRate(voidptr) f64
 	fn C.CGDisplayModeRelease(voidptr)
+
+	const kcfstring_encoding_utf8 = u32(0x08000100)
+
+	fn C.AXUIElementCreateSystemWide() voidptr
+	fn C.AXUIElementCopyAttributeValue(voidptr, voidptr, &voidptr) int
+	fn C.CFStringCreateWithCString(voidptr, &u8, u32) voidptr
+	fn C.CFStringGetCString(voidptr, &u8, i64, u32) bool
+	fn C.CFStringGetLength(voidptr) i64
+	fn C.CFStringGetTypeID() u64
+	fn C.CFGetTypeID(voidptr) u64
 } $else {
 	$compile_error('auto: unsupported operating system')
 }

@@ -42,6 +42,37 @@ fn main() {
 }
 ```
 
+## Window queries
+
+The `Window` namespace can read the active window and its title and wait for
+windows to become active, similar to AutoIt's `WinWaitActive`:
+
+```v
+import auto
+import time
+
+fn main() {
+    // title of the currently focused window
+    println(auto.Window.active_title())
+
+    // handle based access (Windows and X11)
+    handle := auto.Window.active()
+    if handle != 0 {
+        println('${handle}: ${auto.Window.title(handle)}')
+        println('focused control: ${auto.Window.control_text(handle)}')
+    }
+
+    // block until a window whose title contains "Editor" is active
+    auto.Window.wait_active('Editor', timeout: 5 * time.second)
+    auto.Window.wait_not_active('Editor', timeout: 5 * time.second)
+}
+```
+
+`Window.control_text` reads the focused control's text on Windows (focused
+child window) and macOS (Accessibility API); it is not available on X11/Wayland.
+On macOS the `handle` based functions are not available (there is no portable
+window handle), so use `Window.active_title` there.
+
 ## Examples
 
 Runnable examples live in [`examples/`](examples):
@@ -49,6 +80,7 @@ Runnable examples live in [`examples/`](examples):
 - `examples/mouse.v` - move, click and drag the mouse
 - `examples/keyboard.v` - type text and press shortcuts
 - `examples/screen.v` - inspect the compositor, display size and refresh rate
+- `examples/window.v` - read and wait for the active window
 
 Run one with `v run examples/mouse.v`.
 
